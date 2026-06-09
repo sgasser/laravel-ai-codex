@@ -21,7 +21,7 @@
     ],
     "require": {
         "php": "^8.3",
-        "laravel/ai": "^0.7.0",
+        "laravel/ai": "^0.8.0",
         "spatie/laravel-package-tools": "^1.93"
     },
     "require-dev": {
