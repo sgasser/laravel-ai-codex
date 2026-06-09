@@ -130,6 +130,7 @@ final class CodexGateway extends OpenAiGateway
                 $schema,
                 $options,
                 $this->streamingResponseBody($provider, $body, $timeout),
+                $body,
                 0,
                 null,
                 $timeout,
@@ -177,8 +178,8 @@ final class CodexGateway extends OpenAiGateway
      *
      * @param  array<int, Tool>  $tools
      * @param  array<string, Type>|null  $schema
+     * @param  array<string, mixed>  $requestBody
      * @param  array<int, array<string, mixed>>  $pendingToolCalls
-     * @param  array<int, array<string, mixed>>  $reasoningItems
      */
     protected function handleStreamingToolCalls(
         string $invocationId,
@@ -188,9 +189,9 @@ final class CodexGateway extends OpenAiGateway
         array $tools,
         ?array $schema,
         ?TextGenerationOptions $options,
+        array $requestBody,
         array $pendingToolCalls,
         string $currentText,
-        array $reasoningItems,
         int $depth,
         ?int $maxSteps,
         ?int $timeout = null,
@@ -239,6 +240,7 @@ final class CodexGateway extends OpenAiGateway
             $schema,
             $options,
             $this->streamingResponseBody($provider, $body, $timeout),
+            $body,
             $depth + 1,
             $maxSteps,
             $timeout,
