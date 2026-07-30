@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\JsonSchema\Types\StringType;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\StructuredTextResponse;
 use Laravel\Ai\Tools\Request;
 use StefanGasser\LaravelAiCodex\Auth\CodexTokenResolver;
 use StefanGasser\LaravelAiCodex\Exceptions\CodexAuthException;
@@ -41,7 +43,12 @@ it('calls the codex responses endpoint with codex auth', function (): void {
     ]);
 
     $provider = Ai::textProvider('codex');
-    $response = $provider->textGateway()->generateText(
+
+    if (! $provider instanceof CodexProvider) {
+        throw new RuntimeException('Codex provider was not registered correctly.');
+    }
+
+    $response = $provider->textGenerationLoop()->generate(
         $provider,
         'gpt-5.5',
         'Be direct.',
@@ -86,6 +93,34 @@ it('generates text through the codex convenience method', function (): void {
     expect($response->text)->toBe('Convenience works.');
 });
 
+it('generates structured text through the Laravel AI step response', function (): void {
+    config()->set('ai.providers.codex.access_token', 'test-codex-token');
+    Ai::forgetInstance('codex');
+
+    Http::fake([
+        'https://chatgpt.com/backend-api/codex/responses' => Http::response(codexTextStream('{"answer":"yes"}'), 200),
+    ]);
+
+    $provider = Ai::textProvider('codex');
+
+    if (! $provider instanceof CodexProvider) {
+        throw new RuntimeException('Codex provider was not registered correctly.');
+    }
+
+    $response = $provider->generateText(
+        'Answer yes.',
+        schema: ['answer' => (new StringType)->required()],
+    );
+
+    expect($response)->toBeInstanceOf(StructuredTextResponse::class);
+
+    if (! $response instanceof StructuredTextResponse) {
+        throw new RuntimeException('Codex did not return a structured response.');
+    }
+
+    expect($response->structured)->toBe(['answer' => 'yes']);
+});
+
 it('supports Laravel AI tool callbacks through the codex provider', function (): void {
     config()->set('ai.providers.codex.access_token', 'test-codex-token');
     Ai::forgetInstance('codex');
@@ -97,7 +132,12 @@ it('supports Laravel AI tool callbacks through the codex provider', function ():
     ]);
 
     $provider = Ai::textProvider('codex');
-    $response = $provider->textGateway()->generateText(
+
+    if (! $provider instanceof CodexProvider) {
+        throw new RuntimeException('Codex provider was not registered correctly.');
+    }
+
+    $response = $provider->textGenerationLoop()->generate(
         $provider,
         'gpt-5.5',
         null,

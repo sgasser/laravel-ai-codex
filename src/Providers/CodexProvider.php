@@ -6,7 +6,6 @@ namespace StefanGasser\LaravelAiCodex\Providers;
 
 use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Collection;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
 use Laravel\Ai\Contracts\Providers\SupportsFileSearch;
 use Laravel\Ai\Contracts\Providers\SupportsWebSearch;
 use Laravel\Ai\Contracts\Providers\TextProvider;
@@ -40,11 +39,6 @@ final class CodexProvider extends Provider implements SupportsFileSearch, Suppor
         parent::__construct($gateway, $config, $events);
     }
 
-    public function textGateway(): TextGateway
-    {
-        return $this->textGateway ?? $this->gateway;
-    }
-
     /**
      * @return array{key: string}
      */
@@ -60,17 +54,10 @@ final class CodexProvider extends Provider implements SupportsFileSearch, Suppor
      */
     public function additionalConfiguration(): array
     {
-        $configuration = [];
-
-        foreach (parent::additionalConfiguration() as $key => $value) {
-            if (is_string($key)) {
-                $configuration[$key] = $value;
-            }
-        }
-
         return [
-            ...$configuration,
+            ...parent::additionalConfiguration(),
             'url' => $this->stringConfig('url', 'https://chatgpt.com/backend-api/codex'),
+            'store' => false,
         ];
     }
 
@@ -140,7 +127,7 @@ final class CodexProvider extends Provider implements SupportsFileSearch, Suppor
         ?int $timeout = null,
         ?array $schema = null,
     ): TextResponse {
-        return $this->textGateway()->generateText(
+        return $this->textGenerationLoop()->generate(
             $this,
             $model ?? $this->defaultTextModel(),
             null,
