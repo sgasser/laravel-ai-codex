@@ -225,6 +225,36 @@ it('throws when codex auth is unavailable', function (): void {
     $resolver->token();
 })->throws(CodexAuthException::class);
 
+it('falls back to the passwd database when no home environment variable is set', function (): void {
+    $entry = posix_getpwuid(posix_geteuid());
+
+    if ($entry === false || $entry['dir'] === '') {
+        throw new RuntimeException('The passwd database has no home directory for this user.');
+    }
+
+    $variables = ['HOME', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'];
+    $previousValues = [];
+
+    try {
+        foreach ($variables as $variable) {
+            $previousValues[$variable] = getenv($variable);
+            putenv($variable);
+        }
+
+        $resolver = new CodexTokenResolver([]);
+        $method = new ReflectionMethod($resolver, 'homeDirectory');
+
+        expect($method->invoke($resolver))->toBe($entry['dir']);
+    } finally {
+        foreach ($previousValues as $variable => $value) {
+            restoreEnv($variable, $value);
+        }
+    }
+})->skip(
+    fn (): bool => ! function_exists('posix_geteuid') || ! function_exists('posix_getpwuid'),
+    'The posix extension is not available.',
+);
+
 /**
  * @return non-empty-string
  */

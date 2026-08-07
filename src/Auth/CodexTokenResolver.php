@@ -76,6 +76,14 @@ final readonly class CodexTokenResolver
             return $this->withoutTrailingDirectorySeparators(mb_trim($drive).mb_trim($path));
         }
 
+        if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+            $entry = posix_getpwuid(posix_geteuid());
+
+            if ($entry !== false && mb_trim($entry['dir']) !== '') {
+                return $this->withoutTrailingDirectorySeparators(mb_trim($entry['dir']));
+            }
+        }
+
         return null;
     }
 
