@@ -121,7 +121,7 @@ it('generates structured text through the Laravel AI step response', function ()
     expect($response->structured)->toBe(['answer' => 'yes']);
 });
 
-it('supports Laravel AI tool callbacks through the codex provider', function (): void {
+it('supports Laravel AI tool callbacks when Codex omits output from the completion event', function (): void {
     config()->set('ai.providers.codex.access_token', 'test-codex-token');
     Ai::forgetInstance('codex');
 
@@ -353,14 +353,7 @@ function codexToolCallResponse(): array
         'id' => 'resp_1',
         'status' => 'completed',
         'model' => 'gpt-5.5',
-        'output' => [[
-            'id' => 'fc_1',
-            'type' => 'function_call',
-            'status' => 'completed',
-            'call_id' => 'call_1',
-            'name' => 'CodexEchoTool',
-            'arguments' => '{"value":"pong"}',
-        ]],
+        'output' => [],
         'usage' => [
             'input_tokens' => 12,
             'input_tokens_details' => ['cached_tokens' => 0],
