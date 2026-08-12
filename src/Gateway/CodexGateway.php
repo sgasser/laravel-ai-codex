@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace StefanGasser\LaravelAiCodex\Gateway;
 
+use Generator;
 use Illuminate\JsonSchema\Types\Type;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -14,7 +15,9 @@ use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\FinishReason;
 use Laravel\Ai\Streaming\Events\Error;
+use Laravel\Ai\Streaming\Events\StreamEvent;
 use StefanGasser\LaravelAiCodex\Exceptions\CodexParseException;
 
 final class CodexGateway extends OpenAiGateway
@@ -78,6 +81,46 @@ final class CodexGateway extends OpenAiGateway
             }
 
             $response->structured = $structured;
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param  array<int, Message>  $messages
+     * @param  array<int, Tool>  $tools
+     * @param  array<string, Type>|null  $schema
+     * @return Generator<int, StreamEvent, mixed, StepResponse|null>
+     */
+    public function generateStreamStep(
+        string $invocationId,
+        TextProvider $provider,
+        string $model,
+        ?string $instructions,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): Generator {
+        $response = yield from parent::generateStreamStep(
+            $invocationId,
+            $provider,
+            $model,
+            $instructions,
+            $messages,
+            $tools,
+            $schema,
+            $options,
+            $timeout,
+            $stepContext,
+        );
+
+        if ($response instanceof StepResponse
+            && $response->finishReason === FinishReason::Unknown
+            && $response->toolCalls !== []) {
+            $response->finishReason = FinishReason::ToolCalls;
         }
 
         return $response;
