@@ -2,7 +2,7 @@
 
 All notable changes to `sgasser/laravel-ai-codex` will be documented in this file.
 
-## Unreleased
+## 0.3.0 - 2026-10-13
 
 - Require Laravel AI 1.2.1 or later in the 1.x series.
 - Support `models.text` configuration while preserving legacy model settings.
