@@ -154,7 +154,8 @@ final class CodexProvider extends Provider implements SupportsFileSearch, Suppor
             return null;
         }
 
-        $value = $models[$key] ?? null;
+        $textModels = $models['text'] ?? null;
+        $value = (is_array($textModels) ? ($textModels[$key] ?? null) : null) ?? $models[$key] ?? null;
 
         return is_string($value) && mb_trim($value) !== '' ? mb_trim($value) : null;
     }
