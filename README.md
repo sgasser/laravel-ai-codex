@@ -20,7 +20,7 @@ php artisan vendor:publish --tag="codex-config"
 Requirements:
 
 - PHP 8.3+
-- Laravel AI 0.7+
+- Laravel AI 1.2.1+
 - Codex access token
 
 ## Configure

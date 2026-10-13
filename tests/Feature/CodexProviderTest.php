@@ -7,10 +7,13 @@ use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\JsonSchema\Types\StringType;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\Ai;
+use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Messages\UserMessage;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Responses\StructuredTextResponse;
+use Laravel\Ai\Streaming\Events\TextDelta;
+use Laravel\Ai\Streaming\Events\ToolResult;
 use Laravel\Ai\Tools\Request;
 use StefanGasser\LaravelAiCodex\Auth\CodexTokenResolver;
 use StefanGasser\LaravelAiCodex\Exceptions\CodexAuthException;
@@ -56,8 +59,11 @@ it('calls the codex responses endpoint with codex auth', function (): void {
     );
 
     expect($response->text)->toBe('Hello from Codex.');
-    expect($response->usage->promptTokens)->toBe(8);
-    expect($response->usage->completionTokens)->toBe(5);
+    expect($response->usage->inputTokens)->toBe(10);
+    expect($response->usage->outputTokens)->toBe(5);
+    expect($response->usage->cacheReadInputTokens)->toBe(2);
+    expect($response->usage->reasoningTokens)->toBe(1);
+    expect($response->usage->uncachedInputTokens())->toBe(8);
     expect($response->meta->provider)->toBe('codex');
 
     Http::assertSent(function (HttpRequest $request): bool {
@@ -91,6 +97,84 @@ it('generates text through the codex convenience method', function (): void {
     $response = $provider->generateText('Say it works.', model: 'gpt-5.5');
 
     expect($response->text)->toBe('Convenience works.');
+});
+
+it('uses configured text models while preserving legacy model settings', function (array $models): void {
+    config()->set('ai.providers.codex.models', $models);
+    Ai::forgetInstance('codex');
+
+    $provider = Ai::textProvider('codex');
+
+    expect($provider->defaultTextModel())->toBe('default-model');
+    expect($provider->cheapestTextModel())->toBe('cheap-model');
+    expect($provider->smartestTextModel())->toBe('smart-model');
+})->with([
+    'Laravel AI text models' => [[
+        'text' => ['default' => 'default-model', 'cheapest' => 'cheap-model', 'smartest' => 'smart-model'],
+        'default' => 'legacy-model',
+    ]],
+    'legacy models' => [[
+        'default' => 'default-model', 'cheapest' => 'cheap-model', 'smartest' => 'smart-model',
+    ]],
+]);
+
+it('prompts an agent through the codex provider', function (): void {
+    config()->set('ai.providers.codex.access_token', 'test-codex-token');
+    config()->set('ai.providers.codex.models.text.default', 'agent-model');
+    Ai::forgetInstance('codex');
+
+    Http::fake([
+        'https://chatgpt.com/backend-api/codex/responses' => Http::response(codexTextStream('Agent works.'), 200),
+    ]);
+
+    $response = (new AnonymousAgent('Be direct.', [], []))->prompt('Say it works.', provider: 'codex');
+
+    expect($response->text)->toBe('Agent works.');
+    expect($response->usage->inputTokens)->toBe(10);
+
+    Http::assertSent(function (HttpRequest $request): bool {
+        $data = httpRequestData($request);
+
+        return ($data['model'] ?? null) === 'agent-model'
+            && ($data['instructions'] ?? null) === 'Be direct.'
+            && ($data['store'] ?? null) === false
+            && ($data['stream'] ?? null) === true;
+    });
+});
+
+it('streams agent text and tool results through the codex provider', function (): void {
+    config()->set('ai.providers.codex.access_token', 'test-codex-token');
+    Ai::forgetInstance('codex');
+
+    Http::fake([
+        'https://chatgpt.com/backend-api/codex/responses' => Http::sequence()
+            ->push(codexToolCallStream(), 200)
+            ->push(codexTextStream('Tool returned: tool:pong', 'resp_2'), 200),
+    ]);
+
+    $response = (new AnonymousAgent('Be direct.', [], [new CodexEchoTool]))
+        ->stream('Use the tool.', provider: 'codex');
+    $events = iterator_to_array($response);
+
+    expect(TextDelta::combine($events))->toBe('Tool returned: tool:pong');
+    expect($response->text)->toBe('Tool returned: tool:pong');
+    expect($response->usage?->inputTokens)->toBe(22);
+    expect($response->usage?->outputTokens)->toBe(8);
+    expect($response->events->whereInstanceOf(ToolResult::class))->toHaveCount(1);
+
+    Http::assertSentCount(2);
+    Http::assertSent(function (HttpRequest $request): bool {
+        $data = httpRequestData($request);
+        $input = arrayValue($data['input'] ?? null);
+        $toolResult = arrayValue($input[2] ?? null);
+
+        return ! array_key_exists('previous_response_id', $data)
+            && ($data['instructions'] ?? null) === 'Be direct.'
+            && ($data['store'] ?? null) === false
+            && ($data['stream'] ?? null) === true
+            && ($toolResult['type'] ?? null) === 'function_call_output'
+            && ($toolResult['output'] ?? null) === 'tool:pong';
+    });
 });
 
 it('generates structured text through the Laravel AI step response', function (): void {
